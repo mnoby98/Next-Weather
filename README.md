@@ -4,6 +4,8 @@ This weather web application is a real-time weather forecast app built with Next
 
 ---
 
+## Features
+
 - ✅ Real-time Weather Updates: Fetch and display real-time weather data for any location using a weather API.
 - ✅ Current Weather Conditions: View current weather conditions, including temperature.
 - ✅ Daily Forecasts: Access detailed daily forecasts, including temperature highs and lows.
@@ -11,6 +13,10 @@ This weather web application is a real-time weather forecast app built with Next
 - ✅ User-Friendly Interface: Enjoy a responsive and user-friendly interface that adapts to different screen sizes and devices.
 
 ---
+
+#### Home Page
+
+![Weather](https://github.com/mnoby98/Next-Weather/assets/133987293/13fbd236-bebf-4e73-a436-e30a3fc1ba24)
 
 ### Technology Stack:
 
