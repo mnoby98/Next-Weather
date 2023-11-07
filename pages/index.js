@@ -1,118 +1,155 @@
-import Image from 'next/image'
-import { Inter } from 'next/font/google'
+import textError from "@/components/textError";
+import { ErrorMessage, Field, Form, Formik } from "formik";
+import { useState } from "react";
+import * as Yup from "yup";
 
-const inter = Inter({ subsets: ['latin'] })
+// Weather Icon
+function getWeatherIcon(wmoCode) {
+  const icons = new Map([
+    [[0], "☀️"],
+    [[1], "🌤"],
+    [[2], "⛅️"],
+    [[3], "☁️"],
+    [[45, 48], "🌫"],
+    [[51, 56, 61, 66, 80], "🌦"],
+    [[53, 55, 63, 65, 57, 67, 81, 82], "🌧"],
+    [[71, 73, 75, 77, 85, 86], "🌨"],
+    [[95], "🌩"],
+    [[96, 99], "⛈"],
+  ]);
+  const arr = [...icons.keys()].find((key) => key.includes(wmoCode));
+  if (!arr) return "NOT FOUND";
+  return icons.get(arr);
+}
 
-export default function Home() {
+// Form day (Sat,Sun,...)
+function formatDay(dateStr) {
+  return new Intl.DateTimeFormat("en", {
+    weekday: "short",
+  }).format(new Date(dateStr));
+}
+
+// Getting Location to get weather
+async function gettingData(location) {
+  try {
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${location}`
+    );
+    const data = await res.json();
+
+    const { latitude, longitude, timezone, name, country_code } =
+      data?.results?.at(0);
+    const weatherRes = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&timezone=${timezone}&daily=weathercode,temperature_2m_max,temperature_2m_min`
+    );
+    const weatherData = await weatherRes.json();
+    return weatherData;
+  } catch (error) {
+    console.error("Error fetching data:", error);
+  }
+}
+
+//Static fetch with ip in SSR
+export async function getStaticProps() {
+  const res = await fetch("https://ipapi.co/json/");
+  const userData = await res.json();
+  const userCity = userData?.city;
+  const resLocation = await fetch(
+    `https://geocoding-api.open-meteo.com/v1/search?name=${userCity}`
+  );
+  const data = await resLocation.json();
+
+  const { latitude, longitude, timezone, country_name, country_code } =
+    data?.results?.at(0);
+  const weatherRes = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&timezone=${timezone}&daily=weathercode,temperature_2m_max,temperature_2m_min`
+  );
+  const weatherData = await weatherRes.json();
+  return { props: { data: weatherData, city: userCity } };
+}
+
+const Home = ({ data, city }) => {
+  const [dataFromApi, setDataFromAPi] = useState(data);
+  const initialValues = {
+    city: city || "",
+  };
+  const validationSchema = Yup.object({
+    city: Yup.string()
+      .min(3, "Enter more than 3 letters")
+      .required("Enter City/Country "),
+  });
+  const onSubmit = async (values) => {
+    const returnedData = await gettingData(values.city);
+    setDataFromAPi(returnedData);
+  };
+
+  const dailyWeatherMax = dataFromApi?.daily.temperature_2m_max;
+  const dailyWeatherMin = dataFromApi?.daily.temperature_2m_min;
+  const dailytime = dataFromApi?.daily.time;
+  const dailyCode = dataFromApi?.daily?.weathercode;
+
   return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
+    <div className="  text-center   px-5  py-2  absolute gap-8 lg:px-32  lg:text-4xl   sm:py-24   top-[50%] left-[50%] translate-y-[-50%]  border-black  translate-x-[-50%] border-double border-8  ">
+      <h1 className="Xtext-4xl font-serif mb-10">Next Weather</h1>
+      <Formik
+        initialValues={initialValues}
+        validationSchema={validationSchema}
+        onSubmit={onSubmit}
+      >
+        {(formik) => {
+          return (
+            <Form className=" sm:gap-2 px-2   lg:text-3xl   gap-1 justify-center items-center flex flex-col  sm:text-2xl text-xl ">
+              <p>Search with your Location</p>
+              <Field
+                type="text"
+                name="city"
+                id="city"
+                placeholder="Cairo"
+                className=" text-center rounded-lg max-w-[300px] bg-slate-200 px-2 focus:outline-none sm:text-2xl text-xl  "
+              />
+              <ErrorMessage name="city" component={textError} />
+              <div className="flex gap-6 py-2    sm:text-3xl text-lg sm:flex-nowrap flex-wrap">
+                {dailytime?.map((day, i) => (
+                  <Day
+                    key={day}
+                    day={day}
+                    max={dailyWeatherMax[i]}
+                    min={dailyWeatherMin[i]}
+                    code={dailyCode[i]}
+                    isToday={i === 0}
+                  />
+                ))}
+              </div>
+              <button
+                disabled={formik.isSubmitting === true}
+                type="submit"
+                className="my-3  px-3 py-1 rounded-full bg-black text-white"
+              >
+                {formik.isSubmitting === true ? "Loading..." : "Get Weather"}
+              </button>
+            </Form>
+          );
+        }}
+      </Formik>
+    </div>
+  );
+};
+
+export default Home;
+
+function Day({ max, min, code, isToday, day }) {
+  const getIcon = getWeatherIcon(code);
+
+  return (
+    <div
+      className={`flex flex-col gap-1 ${
+        isToday ? "bg-red-400 px-2 py-1 rounded-md" : ""
+      }`}
     >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">pages/index.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
+      <p>{isToday ? "Today" : formatDay(day)}</p>
+      <span>{getIcon}</span>
+      <p>{max}</p>
+      <p>{min}</p>
+    </div>
+  );
 }
